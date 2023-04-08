@@ -1,0 +1,44 @@
+if (dsgVar(58))
+{
+    YAM_GenGratificator_I1.dsgVar(41) += dsgVar(25);
+}
+
+if (global.dsgVar(0) == 1)
+{
+    YAM_GenGratificator_I1.dsgVar(41) += dsgVar(25);
+    YAM_S_HelicoPasseEnHelico();
+}
+
+YAM_S_HelicoTestCollision();
+if (ReleasedBut("Action_Strafe") && !(IsValidObject(dsgVar(147))))
+{
+    if (!ODA_Director.dsgVar(101))
+    {
+        dsgVar(22) = VectorContribution(PadGlobalVector, GetPersoSighting());
+    }
+    else
+    {
+        dsgVar(22) = (GetVectorNorm(PadGlobalVector) * GetPersoSighting());
+    }
+}
+else
+{
+    if (!ODA_Director.dsgVar(101))
+    {
+        dsgVar(22) = PadGlobalVector;
+    }
+    else
+    {
+        dsgVar(22) = ODA_Director.dsgVar(179);
+        dsgVar(22) = ((GetVectorNorm(VectorContribution(dsgVar(22), GetPersoSighting())) * GetPersoSighting()) * LimitRealInRange(DotProduct(GetPersoSighting(), Speed), -1, 1));
+    }
+}
+
+dsgVar(22) *= (dsgVar(24) * 0.01);
+YAM_S_HelicoGereLaVitesseRelativeEtLInertie();
+if (ReleasedBut("Action_Helico") && dsgVar(25) > 250)
+{
+    YAM_S_SonCoupeHelico();
+    YAM_GenGratificator_I1.dsgVar(41) += dsgVar(25);
+    YAM_S_PasseEnChute();
+}

@@ -1,0 +1,5 @@
+parser
+*.bin
+__pycache__
+*.lvl
+*.ptr

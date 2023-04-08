@@ -1,0 +1,5 @@
+//ImposeSpeedX(dsgVar(1));
+//RotatePersoAroundZ(dsgVar(1));
+
+dsgVar(0) = 5;
+dsgVar(1) = 523.63423;

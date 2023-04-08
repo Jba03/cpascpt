@@ -1,0 +1,22 @@
+dsgVar_64 = 3;
+Cam_ChangeConstants(39, 2);
+Cam_ForceRefAxis(1, 1, dsgVar_36, Vector3(0, 0, 1));
+if (PressedBut("Button_Up"))
+{
+  if (dsgVar_71 < 5)
+  {
+    dsgVar_71 += ((0.2 * GetDeltaT()) / 17);
+  }
+}
+else
+{
+
+}
+
+if (PressedBut(a.dsgVar(5)))
+{
+  if (dsgVar_71 > -5)
+  {
+    dsgVar_71 -= ((0.2 * GetDeltaT()) / 17);
+  }
+}
