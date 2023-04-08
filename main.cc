@@ -10,6 +10,20 @@
 #include "compile.hh"
 #include "interface.hh"
 
+GameInterface gameInterface;
+
+static uint32_t findActor(const char* actorName)
+{
+    Actor* a = gameInterface.findActor(actorName);
+    return a ? a->offset : 0;
+}
+
+static uint32_t findSubroutine(const char* actorName, const char* macroName)
+{
+    Macro* m = gameInterface.findMacro(gameInterface.findActor(actorName), macroName);
+    return m ? m->offset : 0;
+}
+
 int main(int argc, const char * argv[])
 {
     // TODO: maybe read these into memory before initializing the interface.
@@ -23,15 +37,18 @@ int main(int argc, const char * argv[])
     if (!lvlLvl) exit(-1);
     if (!lvlPtr) exit(-1);
     
-    GameInterface interface(fixLvl, fixPtr, lvlLvl, lvlPtr);
-    
+    // Read source file
     std::ifstream file("tests/test2");
-    
     std::stringstream source;
     source << file.rdbuf();
     
-    CompilerContext compiler(CompilerContext::Target::Target_R3_GC);
+    // Load the game interface
+    gameInterface = GameInterface(fixLvl, fixPtr, lvlLvl, lvlPtr);
     
+    // Compile!
+    CompilerContext compiler(CompilerContext::Target::Target_R3_GC);
+    compiler.callbackFindActor = findActor;
+    compiler.callbackFindSubroutine = findSubroutine;
     compiler.compile(source.str());
     
     printf("n nodes: %zu\n", compiler.nodes.size());

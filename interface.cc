@@ -8,21 +8,20 @@
 #include "interface.hh"
 
 #include <fstream>
+#include <sstream>
 #include <memory>
 
-#define pointerRead(streamName, code) std::function<void (std::istream &)> ([](std::fstream& streamName) { code; }))
+#pragma mark - Memory
+
+#define ptrReadFn std::function<void (std::fstream &)> 
 
 template <typename T>
 class ReadResult
 {
 public:
     T data;
-    long readOffset = 0;
-    ReadResult(T type, long readOffset) : data(type), readOffset(readOffset) {
-        
-        
-        int a;
-    }
+    unsigned readOffset = 0;
+    ReadResult(T type, long readOffset = 0) : data(type), readOffset(readOffset) { }
 
     operator T() const { return data; }
     T swap()
@@ -36,13 +35,13 @@ public:
         }
     }
     
-    T doAt(Level *level, std::function<void(std::fstream&)>&& callback)
+    T doAt(Level *level, std::function<void(std::fstream&, uint8_t)>&& callback)
     {
-        std::pair<pointer, uint8_t> pair = level->pointers[readOffset];
+        std::pair<pointer, uint8_t> pair = level->pointers[readOffset - 4];
         pointer pointer = pair.first;
         uint8_t fileID = pair.second;
         
-        if (fileID < 2) // >= 3: kf, vb
+        if (pointer != 0 && fileID < 2) // >= 3: kf, vb
         {
             // Go to the level the pointer points to
             Level* lvl = level->interface->level[fileID];
@@ -53,45 +52,36 @@ public:
             // Seek to pointer location
             stream.seekg(pointer);
             // Let the user decide.
-            callback(stream);
+            callback(stream, fileID);
             // Go back to checkpoint
             stream.seekg(checkpoint);
         }
         
         return data;
     }
+    
+    T doAt(Level *level, std::function<void(std::fstream&)>&& callback)
+    {
+        return doAt(level, std::function<void (std::fstream &, uint8_t)> ([callback](std::fstream& stream, uint8_t) { callback(stream); }));
+    }
+    
+    T* dynamic()
+    {
+        T *dyn = new T{};
+        memcpy(dyn, &data, sizeof(T));
+        return dyn;
+    }
 };
 
 template <typename T>
 static ReadResult<T> read(std::fstream& file)
 {
-    T data;
+    T data {};
     file.read((char*)&data, sizeof(T));
     return ReadResult<T>(data, file.tellg());
 }
 
-static void ReadAt(const pointer p, Level* level, std::function<void(std::fstream&)>&& callback)
-{
-    std::pair<pointer, uint8_t> data = level->pointers[p];
-    pointer pointer = data.first;
-    uint8_t fileID = data.second;
-    
-    if (fileID < 2) // >= 3: kf, vb
-    {
-        // Go to the level the pointer points to
-        Level* lvl = level->interface->level[data.second];
-        // Get the file handle of the level file
-        std::fstream& stream = lvl->levelFile;
-        // Save position
-        auto checkpoint = stream.tellg();
-        // Seek to pointer location
-        stream.seekg(pointer);
-        // Let the user decide.
-        callback(stream);
-        // Go back to checkpoint
-        stream.seekg(checkpoint);
-    }
-}
+#pragma mark - Level
 
 Level::Level(GameInterface* interface, std::fstream& lvl, std::fstream& ptr, bool isFix) : levelFile(lvl), pointerFile(ptr), isFix(isFix)
 {
@@ -101,20 +91,76 @@ Level::Level(GameInterface* interface, std::fstream& lvl, std::fstream& ptr, boo
     while (numPointers--)
     {
         uint32_t fileID = read<uint32_t>(ptr).swap();
-        doublepointer doublePointer = read<doublepointer>(ptr).swap();
+        doublepointer doublePointer = read<doublepointer>(ptr).swap() + 4;
         // Seek to the pointed location
-        lvl.seekg(doublePointer + 4);
+        lvl.seekg(doublePointer);
         // Read the pointer at the location
-        pointer resultingPointer = read<pointer>(lvl).swap();
+        pointer resultingPointer = read<pointer>(lvl).swap() + 4;
         
-        pointers[doublePointer + 4] = std::make_pair(resultingPointer, fileID);
+        pointers[doublePointer] = std::make_pair(resultingPointer, fileID);
     }
     
+    lvl.seekg(0);
     
     
 //    ReadAt(0, this, std::function<void (std::fstream &)> ([](std::fstream& stream) {
 //
 //    }));
+}
+
+void Level::ReadActor(std::fstream& stream)
+{
+    //auto savepoint = stream.tellg();
+    
+    Actor actor;
+    
+    stream.ignore(4); // Skip 3DData
+    read<pointer>(stream).doAt(this, ptrReadFn([this, &actor](std::fstream& stdGameStream) {
+        // Inside stdgame struct
+        actor.familyType = read<uint32_t>(stdGameStream).swap();
+        actor.modelType = read<uint32_t>(stdGameStream).swap();
+        actor.instanceType = read<uint32_t>(stdGameStream).swap();        
+    }));
+    
+    stream.ignore(4); // Skip dynamics
+    read<pointer>(stream).doAt(this, ptrReadFn([this, &actor](std::fstream& brainStream) {
+        // Inside brain struct
+        read<pointer>(brainStream).doAt(this, ptrReadFn([this, &actor](std::fstream& mindStream) {
+            // Inside mind struct
+            read<pointer>(mindStream).doAt(this, ptrReadFn([this, &actor](std::fstream& AIModelStream) {
+                // Inside AIModel struct
+                // Skip intelligence, reflex and dsgvars
+                read<pointer>(AIModelStream).doAt(this, ptrReadFn([this, &actor](std::fstream& macroListStream) {
+                    // Save position
+                    auto savepoint = macroListStream.tellg();
+                    // Skip first macro pointer
+                    macroListStream.ignore(4);
+                    // Read macro count
+                    uint32_t numMacros = read<uint32_t>(macroListStream).swap();
+                    // Seek back
+                    macroListStream.seekg(savepoint);
+                    // Read the macros
+                    read<pointer>(macroListStream).doAt(this, ptrReadFn([this, &actor, numMacros](std::fstream& macroStream) {
+                        for (unsigned int i = 0; i < numMacros; i++) {
+                            
+                            char* buf = new char[0x100];
+                            macroStream.read(buf, 0x100);
+                            std::string name(buf);
+                            delete[] buf;
+                            
+                            Macro macro;
+                            macro.name = name;
+                            actor.macros.push_back(macro);
+                        }
+                    }));
+                }));
+            }));
+        }));
+    }));
+    
+    this->interface->actors.push_back(actor);
+    
+    //stream.seekg(savepoint);
 }
 
 void Level::Load()
@@ -137,6 +183,26 @@ void Level::Load()
         advance(30 * levelNameCount + 30);
         // Language
         advance(10);
+        // Texture count
+        numTextures = read<uint32_t>(levelFile).swap();
+        // Skip textures
+        advance(numTextures * 4);
+        // Skip menu textures
+        advance(read<uint32_t>(levelFile).swap() * 4);
+        // Skip memory channels
+        advance(numTextures * 4);
+        // Skip input structure (for now)
+        advance(0x12E0 + 0x8 + 0x418 + 0xE8);
+        
+        uint32_t numActors = read<uint32_t>(levelFile).swap();
+        for (unsigned int n = 0; n < numActors; n++)
+        {
+            read<pointer>(levelFile).doAt(this, ptrReadFn([this](std::fstream& actorStream) {
+                // Start of actor struct
+                ReadActor(actorStream);
+            }));
+        }
+        
         
     }
     else
@@ -148,6 +214,11 @@ void Level::Load()
 void Level::advance(int bytes)
 {
     levelFile.ignore(bytes);
+}
+
+void Level::seek(long offset)
+{
+    levelFile.seekg(offset);
 }
 
 GameInterface::GameInterface(std::fstream& fix,
@@ -163,4 +234,21 @@ GameInterface::GameInterface(std::fstream& fix,
     
     fixLevel->Load();
     lvlLevel->Load();
+}
+
+Actor* GameInterface::findActor(std::string name)
+{
+    for (Actor& a : actors)
+        if (a.name == name) return &a;
+    
+    return nullptr;
+}
+
+Macro* GameInterface::findMacro(Actor* actor, std::string macroName)
+{
+    if (!actor) return nullptr;
+    for (Macro& m : actor->macros)
+        if (m.name == macroName) return &m;
+    
+    return nullptr;
 }

@@ -29,40 +29,43 @@
 typedef uint32_t pointer;
 typedef uint32_t doublepointer;
 
+struct Level;
+struct GameInterface;
+
 struct Macro
 {
-    readonly int8_t name[0x100];
-    readonly pointer initialScript;
-    readonly pointer currentScript;
+    std::string name;
+    uint32_t offset;
 };
 
-struct SubroutineList
-{
-    readonly pointer macros;
-    readonly uint8_t numMacros;
-    readonly uint8_t padding[3];
-};
-
-struct AIModel
-{
-    readonly pointer intelligenceBehaviorList;
-    readonly pointer reflexBehaviorList;
-    readonly pointer dsgVar;
-    readonly pointer macroList;
-    readonly uint8_t secondPass;
-    readonly uint8_t padding[3];
-};
-
-struct Mind
-{
-    readonly pointer AIModel;
-    readonly pointer intelligence;
-    readonly pointer reflex;
-    readonly pointer dsgMem;
-    readonly uint8_t runIntelligence;
-    readonly uint8_t padding[3];
-};
-
+//
+//struct MacroList
+//{
+//    readonly pointer macros;
+//    readonly uint8_t numMacros;
+//    readonly uint8_t padding[3];
+//};
+//
+//struct AIModel
+//{
+//    readonly pointer intelligenceBehaviorList;
+//    readonly pointer reflexBehaviorList;
+//    readonly pointer dsgVar;
+//    readonly pointer macroList;
+//    readonly uint8_t secondPass;
+//    readonly uint8_t padding[3];
+//};
+//
+//struct Mind
+//{
+//    readonly pointer AIModel;
+//    readonly pointer intelligence;
+//    readonly pointer reflex;
+//    readonly pointer dsgMem;
+//    readonly uint8_t runIntelligence;
+//    readonly uint8_t padding[3];
+//};
+//
 struct Brain
 {
     readonly pointer mind;
@@ -70,24 +73,21 @@ struct Brain
     readonly uint8_t warnMechanics;
     readonly uint8_t activeDuringTransition;
     readonly uint8_t padding[2];
+    
+    
 };
 
 struct Actor
 {
-    readonly pointer p3DData;
-    readonly pointer stdGame;
-    readonly pointer dynam;
-    readonly pointer brain;
-    readonly pointer cineInfo;
-    readonly pointer collSet;
-    readonly pointer msWay;
-    readonly pointer msLight;
-    readonly pointer sectorInfo;
-    readonly pointer micro;
-    readonly pointer msSound;
+    uint32_t familyType;
+    uint32_t modelType;
+    uint32_t instanceType;
+    
+    std::vector<Macro> macros;
+    std::string name;
+    
+    uint32_t offset;
 };
-
-struct GameInterface;
 
 struct Level
 {
@@ -97,10 +97,14 @@ struct Level
     std::unordered_map<pointer, std::pair<pointer, uint8_t /* file */> >pointers;
     bool isFix;
     
+    int numTextures = 0;
+    
+    void ReadActor(std::fstream& stream);
     
     Level(GameInterface* interface, std::fstream& lvl, std::fstream& ptr, bool isFix = true);
     void Load();
     void advance(int bytes);
+    void seek(long offset);
 };
 
 struct GameInterface
@@ -108,11 +112,16 @@ struct GameInterface
     // [0] = fixed memory
     // [1] = level memory
     std::vector<Level*> level;
+    std::vector<Actor> actors;
     
+    GameInterface() {}
     GameInterface(std::fstream& fix,
                   std::fstream& fix_ptr,
                   std::fstream& lvl,
                   std::fstream& lvl_ptr);
+    
+    Actor* findActor(std::string name);
+    Macro* findMacro(Actor* actor, std::string macroName);
 };
 
 #endif /* interface_hh */

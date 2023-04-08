@@ -22,6 +22,8 @@ class TreeShapeListener : public GenericBaseListener
 private:
     CompilerContext* compiler;
     bool dotAccess = false;
+    std::string targetActorName;
+    
     std::string errorString = "No error";
     
     void fail(ParserRuleContext* ctx, std::string reason)
@@ -44,9 +46,10 @@ private:
         return -1;
     }
     
-    void* findSubroutine(std::string name)
+    uint32_t findSubroutine(std::string name)
     {
-        return NULL;
+        return compiler->callbackFindSubroutine ?
+        compiler->callbackFindSubroutine(targetActorName.c_str(), name.c_str()) : 0;
     }
     
     bool isVectorOp()
@@ -121,13 +124,12 @@ public:
         long conditionIndex = tableFindSymbol(compiler->conditionTable, name);
         long metaActionIndex = tableFindSymbol(compiler->metaActionTable, name);
         
-        void* subroutine = NULL;
-        
+        uint32_t subroutine = 0;
         if      (functionIndex   >= 0) compiler->makeNode(NodeType::Function, functionIndex);
         else if (procedureIndex  >= 0) compiler->makeNode(NodeType::Procedure, procedureIndex);
         else if (conditionIndex  >= 0) compiler->makeNode(NodeType::Condition, conditionIndex);
         else if (metaActionIndex >= 0) compiler->makeNode(NodeType::MetaAction, metaActionIndex);
-        else if ((subroutine = findSubroutine(name))) compiler->makeNode(NodeType::SubRoutine, /*subroutine->offset*/ 0);
+        else if ((subroutine = findSubroutine(name)) != 0) compiler->makeNode(NodeType::SubRoutine, subroutine);
         else fail(ctx, "No such callable method '" + name + "' found");
         // Make sure only procedures can be called within actor reference access.
         if (this->dotAccess && functionIndex   >= 0) fail(ctx, "Cannot call function '" + name + "' on actor reference");
@@ -365,7 +367,7 @@ void CompilerContext::compile(std::string source)
     // Remove error listeners, as the lexer most likely
     // will generate lots of unnecessary warnings otherwise.
     lexer.removeErrorListeners();
-        
+    
     TreeShapeListener listener;
     CommonTokenStream tokens(&lexer);
     GenericParser parser(&tokens);
@@ -375,4 +377,39 @@ void CompilerContext::compile(std::string source)
     
     tree::ParseTree *tree = parser.source();
     tree::ParseTreeWalker::DEFAULT.walk(&listener, tree);
+}
+
+#pragma mark - Compiler interoperability
+
+DLLEXPORT CompilerContext* CPAScriptCompilerCreate(CompilerContext::Target target)
+{
+    CompilerContext* c = new CompilerContext(target);
+    return c;
+}
+
+DLLEXPORT void CPAScriptCompilerFindActorCallback(CompilerContext* compiler, uint32_t (*callback)(const char*))
+{
+    compiler->callbackFindActor = callback;
+}
+
+DLLEXPORT void CPAScriptCompilerFindMacroCallback(CompilerContext* compiler, uint32_t (*callback)(const char*, const char*))
+{
+    compiler->callbackFindSubroutine = callback;
+}
+
+DLLEXPORT void CPAScriptCompilerEmitNodeCallback(CompilerContext* compiler, void (*callback)(uint8_t, uint32_t, uint8_t))
+{
+    compiler->callbackEmitNode = callback;
+}
+
+DLLEXPORT int CPAScriptCompilerCompile(CompilerContext* compiler, const char* source)
+{
+    compiler->compile(source);
+    return 0;
+}
+
+DLLEXPORT void CPAScriptCompilerDestroy(CompilerContext *c)
+{
+    c->nodes.clear();
+    delete c;
 }

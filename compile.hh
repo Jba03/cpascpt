@@ -66,7 +66,7 @@ enum NodeType
 struct Node
 {
     NodeType type;
-    std::any param;
+    unsigned param;
     unsigned depth;
 };
 
@@ -96,7 +96,16 @@ struct CompilerContext
         Node nd;
         nd.type = type;
         nd.depth = currentDepth;
-        nd.param = param;
+        nd.param = 0;
+        
+        try {
+            nd.param = std::any_cast<uint32_t>(param);
+        } catch (std::bad_any_cast::exception exception) {
+            fprintf(stderr, "invalid cast\n");
+        }
+        
+        if (callbackEmitNode)
+            callbackEmitNode(nd.type, nd.param, nd.depth);
         
         nodes.push_back(nd);
     }
@@ -109,10 +118,12 @@ struct CompilerContext
     void compile(std::string source);
     void loadTables();
     
-    // Callback to find a subroutine by name. Returned is an offset, by the user correctly set.
-    uint32_t (*callbackFindSubroutine)(const char* actorName, const char* subroutineName);
-    // Callback to find an actor by name. Returned is an offset, by the user correctly set.
-    //uint32_t (*callbackFindSubroutine)(const char* actorName, const char* subroutineName);
+    // Callback to find a subroutine by name. Returned is the address of the actor, 0 if none.
+    uint32_t (*callbackFindSubroutine)(const char* actorName, const char* subroutineName) = nullptr;
+    // Callback to find an actor by name. Returned is the address of the subroutine, 0 if none.
+    uint32_t (*callbackFindActor)(const char* actorName) = nullptr;
+    // Callback to be executed when a node is emitted from the compiler.
+    void (*callbackEmitNode)(uint8_t type, uint32_t param, uint8_t depth) = nullptr;
     
     Target target;
     Options options;
@@ -130,5 +141,26 @@ struct CompilerContext
     std::vector<std::string> fieldTable;
     std::vector<std::string> metaActionTable;;
 };
+
+#pragma mark - Compiler interoperability
+
+#if WIN32
+#   define DLLEXPORT __declspec(dllexport)
+#else
+#   define DLLEXPORT
+#endif
+
+// Create a new compiler context
+DLLEXPORT CompilerContext* CPAScriptCompilerCreate(CompilerContext::Target target);
+// Register callback for finding actor offets
+DLLEXPORT void CPAScriptCompilerFindActorCallback(CompilerContext* compiler, uint32_t (*callback)(const char*));
+// Register callback for finding macro offsets
+DLLEXPORT void CPAScriptCompilerFindMacroCallback(CompilerContext* compiler, uint32_t (*callback)(const char*, const char*));
+// Register callback for when the compiler emits a new node
+DLLEXPORT void CPAScriptCompilerEmitNodeCallback(CompilerContext* compiler, void (*callback)(uint8_t, uint32_t, uint8_t));
+// Compile source string
+DLLEXPORT int CPAScriptCompilerCompile(CompilerContext* compiler, const char* source);
+// Destroy compiler context
+DLLEXPORT void CPAScriptCompilerDestroy(CompilerContext *c);
 
 #endif /* compile_hh */
