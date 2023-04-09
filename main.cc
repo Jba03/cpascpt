@@ -6,6 +6,7 @@
 //
 
 #include <iostream>
+#include <filesystem>
 
 #include "compile.hh"
 #include "interface.hh"
@@ -26,19 +27,37 @@ static uint32_t findSubroutine(const char* actorName, const char* macroName)
 
 int main(int argc, const char * argv[])
 {
-    // TODO: maybe read these into memory before initializing the interface.
-    std::fstream fixLvl(argv[1], std::ios_base::binary | std::ios_base::in);
-    std::fstream fixPtr(argv[2], std::ios_base::binary | std::ios_base::in);
-    std::fstream lvlLvl(argv[3], std::ios_base::binary | std::ios_base::in);
-    std::fstream lvlPtr(argv[4], std::ios_base::binary | std::ios_base::in);
+    if (argc < 4)
+    {
+        printf("usage: cpascpt [fix.lvl] [*.lvl] [sourcefile]\n");
+        return -1;
+    }
     
-    if (!fixLvl) exit(-1);
-    if (!fixPtr) exit(-1);
-    if (!lvlLvl) exit(-1);
-    if (!lvlPtr) exit(-1);
+    std::filesystem::path fixPath = std::filesystem::path(argv[1]).replace_extension("");
+    std::filesystem::path levelPath = std::filesystem::path(argv[2]).replace_extension("");
+    std::filesystem::path sourcePath = std::filesystem::path(argv[3]).remove_filename();
+    
+    
+    // TODO: maybe read these into memory before initializing the interface.
+    std::fstream fixLvl(fixPath.string() + ".lvl", std::ios_base::binary | std::ios_base::in);
+    std::fstream fixPtr(fixPath.string() + ".ptr", std::ios_base::binary | std::ios_base::in);
+    std::fstream lvlLvl(levelPath.string() + ".lvl", std::ios_base::binary | std::ios_base::in);
+    std::fstream lvlPtr(levelPath.string() + ".ptr", std::ios_base::binary | std::ios_base::in);
+    
+    if (!fixLvl.is_open() || !fixPtr.is_open())
+    {
+        fprintf(stderr, "failed to open %s: %s\n", (fixPath.string() + (fixLvl.is_open() ? "ptr" : "lvl")).c_str(), strerror(errno));
+        return -1;
+    }
+    
+    if (!lvlLvl.is_open() || !lvlPtr.is_open())
+    {
+        fprintf(stderr, "failed to open %s: %s\n", (levelPath.string() + (lvlLvl.is_open() ? "ptr" : "lvl")).c_str(), strerror(errno));
+        return -1;
+    }
     
     // Read source file
-    std::ifstream file("tests/test2");
+    std::ifstream file(argv[3]);
     std::stringstream source;
     source << file.rdbuf();
     
@@ -56,8 +75,6 @@ int main(int argc, const char * argv[])
         for (int i = 0; i < (node.depth-1)*4; i++)printf(" ");
         printf("%s: %d (%d)\n", compiler.nodeTypeTable[node.type].c_str(), node.param, node.depth);
     }
-    
-    //printf("n nodes: %zu\n", compiler.nodes.size());
     
     return 0;
 }
