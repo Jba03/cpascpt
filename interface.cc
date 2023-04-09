@@ -10,6 +10,7 @@
 #include <fstream>
 #include <sstream>
 #include <memory>
+#include <iostream>
 
 #pragma mark - Memory
 
@@ -21,7 +22,18 @@ class ReadResult
 public:
     T data;
     unsigned readOffset = 0;
-    ReadResult(T type, long readOffset = 0) : data(type), readOffset(readOffset) { }
+    std::fstream stream;
+    
+    ReadResult(T type, long readOffset = 0) : data(type), readOffset(readOffset)
+    {
+//        if (std::is_same<T, pointer>::value) // Read pointer
+//        {
+//            std::pair<pointer, uint8_t> pair = level->pointers[readOffset - 4];
+//            pointer pointer = pair.first;
+//            uint8_t fileID = pair.second;
+//            data = pointer;
+//        }
+    }
 
     operator T() const { return data; }
     T swap()
@@ -37,11 +49,11 @@ public:
     
     T doAt(Level *level, std::function<void(std::fstream&, uint8_t)>&& callback)
     {
-        std::pair<pointer, uint8_t> pair = level->pointers[readOffset - 4];
+        std::pair<pointer, uint8_t> pair = level->pointers[readOffset];
         pointer pointer = pair.first;
         uint8_t fileID = pair.second;
         
-        if (pointer != 0 && fileID < 2) // >= 3: kf, vb
+        if (pointer != 0 && fileID < 2) // >= 2: kf, vb
         {
             // Go to the level the pointer points to
             Level* lvl = level->interface->level[fileID];
@@ -49,11 +61,10 @@ public:
             std::fstream& stream = lvl->levelFile;
             // Save position
             auto checkpoint = stream.tellg();
-            // Seek to pointer location
+            // Read at pointer
             stream.seekg(pointer);
-            // Let the user decide.
             callback(stream, fileID);
-            // Go back to checkpoint
+            // Seek back
             stream.seekg(checkpoint);
         }
         
@@ -77,8 +88,9 @@ template <typename T>
 static ReadResult<T> read(std::fstream& file)
 {
     T data {};
+    uint32_t offset = file.tellg();
     file.read((char*)&data, sizeof(T));
-    return ReadResult<T>(data, file.tellg());
+    return ReadResult<T>(data, offset);
 }
 
 #pragma mark - Level
@@ -101,11 +113,69 @@ Level::Level(GameInterface* interface, std::fstream& lvl, std::fstream& ptr, boo
     }
     
     lvl.seekg(0);
+}
+
+void Level::ReadFillInPointers()
+{
+    auto checkpoint = pointerFile.tellg();
+    pointerFile.seekg(0, pointerFile.end);
+    long size = pointerFile.tellg();
+    pointerFile.seekg(checkpoint);
     
+    uint32_t numFillInPointers = unsigned((size - pointerFile.tellg()) / 16);
+    while (numFillInPointers--)
+    {
+        uint32_t doublePointer = read<uint32_t>(pointerFile).swap();
+        uint32_t sourceFile = read<uint32_t>(pointerFile).swap();
+        pointer realPointer = read<pointer>(pointerFile).swap();
+        uint32_t targetFile = read<uint32_t>(pointerFile).swap();
+        
+        if (sourceFile < 2 && targetFile < 2)
+        {
+            //printf("%d (%d) -> %d (%d)\n", doublePointer, sourceFile, realPointer, targetFile);
+            this->interface->level[sourceFile]->pointers[doublePointer] = std::make_pair(realPointer, targetFile);
+        }
+    }
+}
+
+template <typename T>
+static void ReadIntelligence(Level *level, std::fstream& stream, std::vector<T>& list, bool isMacro = false)
+{
+    auto checkpoint = stream.tellg();
     
-//    ReadAt(0, this, std::function<void (std::fstream &)> ([](std::fstream& stream) {
-//
-//    }));
+    read<pointer>(stream).doAt(level, ptrReadFn([level, &list, isMacro](std::fstream& listStream) {
+        // Save position
+        auto savepoint = listStream.tellg();
+        // Skip first macro pointer
+        listStream.ignore(4);
+        // Read macro count
+        uint32_t count = isMacro ? read<uint8_t>(listStream).swap() : read<uint32_t>(listStream).swap();
+        // Seek back
+        listStream.seekg(savepoint);
+        // Read the macros
+        read<pointer>(listStream).doAt(level, ptrReadFn([level, &list, count, isMacro](std::fstream& typeStream) {
+            uint32_t offset = typeStream.tellg();
+            
+            for (unsigned int i = 0; i < count; i++) {
+                
+                char* buf = new char[0x100];
+                typeStream.read(buf, 0x100);
+                std::string name(buf);
+                delete[] buf;
+                
+                name = name.substr(name.find(':') + 1);
+                
+                T readtype;
+                readtype.name = name;
+                readtype.offset = offset;
+                list.push_back(readtype);
+                
+                typeStream.ignore(isMacro ? 8 : 12);
+            }
+        }));
+    }));
+    
+    stream.seekg(long(checkpoint) + 4);
 }
 
 void Level::ReadActor(std::fstream& stream)
@@ -113,6 +183,7 @@ void Level::ReadActor(std::fstream& stream)
     //auto savepoint = stream.tellg();
     
     Actor actor;
+    actor.offset = stream.tellg();
     
     stream.ignore(4); // Skip 3DData
     read<pointer>(stream).doAt(this, ptrReadFn([this, &actor](std::fstream& stdGameStream) {
@@ -130,30 +201,16 @@ void Level::ReadActor(std::fstream& stream)
             read<pointer>(mindStream).doAt(this, ptrReadFn([this, &actor](std::fstream& AIModelStream) {
                 // Inside AIModel struct
                 // Skip intelligence, reflex and dsgvars
-                read<pointer>(AIModelStream).doAt(this, ptrReadFn([this, &actor](std::fstream& macroListStream) {
-                    // Save position
-                    auto savepoint = macroListStream.tellg();
-                    // Skip first macro pointer
-                    macroListStream.ignore(4);
-                    // Read macro count
-                    uint32_t numMacros = read<uint32_t>(macroListStream).swap();
-                    // Seek back
-                    macroListStream.seekg(savepoint);
-                    // Read the macros
-                    read<pointer>(macroListStream).doAt(this, ptrReadFn([this, &actor, numMacros](std::fstream& macroStream) {
-                        for (unsigned int i = 0; i < numMacros; i++) {
-                            
-                            char* buf = new char[0x100];
-                            macroStream.read(buf, 0x100);
-                            std::string name(buf);
-                            delete[] buf;
-                            
-                            Macro macro;
-                            macro.name = name;
-                            actor.macros.push_back(macro);
-                        }
-                    }));
-                }));
+                AIModelStream.ignore(0);
+                
+                std::vector<Behavior> intelligenceList;
+                std::vector<Behavior> reflexList;
+                std::vector<Macro> macroList;
+                
+                ReadIntelligence(this, AIModelStream, actor.intelligenceList);
+                ReadIntelligence(this, AIModelStream, actor.reflexList);
+                AIModelStream.ignore(4); // Skip dsgvars
+                ReadIntelligence(this, AIModelStream, actor.macroList, true);
             }));
         }));
     }));
@@ -161,6 +218,35 @@ void Level::ReadActor(std::fstream& stream)
     this->interface->actors.push_back(actor);
     
     //stream.seekg(savepoint);
+}
+
+static void ReadObjectType(Level *lvl, std::fstream& stream, std::vector<std::string>& names)
+{
+    auto readtype = [lvl, &names] (std::fstream &elementStream) {
+        elementStream.ignore(12);
+        
+        read<pointer>(elementStream).doAt(lvl, ptrReadFn([lvl, &names](std::fstream& nameStream) {
+            std::stringstream sstream;
+            
+            while (1) {
+                char c = read<char>(nameStream);
+                if (c < 33 || c > 126) break;
+                sstream << std::string(1, c);
+            }
+            
+            std::string name = sstream.str();
+            names.push_back(name);
+        }));
+        
+        elementStream.ignore(4);
+    };
+    
+    readtype(stream);
+    while (1) {
+        if (read<ObjectTypeElement>(stream).doAt(lvl, ptrReadFn([lvl, &names, readtype](std::fstream& elementStream) {
+            readtype(elementStream);
+        })).next == 0) break;
+    }
 }
 
 void Level::Load()
@@ -207,7 +293,49 @@ void Level::Load()
     }
     else
     {
+        // Base + ?
+        advance(4 + 4 * 4);
+        // Text + ?
+        advance(24 + 4 * 60);
+        // Texture count (minus fix texture count)
+        numTextures = read<uint32_t>(levelFile).swap() - interface->level[0]->numTextures;
+        // Skip textures
+        advance(2 * numTextures * 4);
         
+        //printf("%lld\n", levelFile.tellg().operator long long());
+        
+        pointer actualWorld = read<pointer>(levelFile).swap();
+        pointer dynamicWorld = read<pointer>(levelFile).swap();
+        pointer inactiveDynamicWorld = read<pointer>(levelFile).swap();
+        pointer fatherSector = read<pointer>(levelFile).swap();
+        pointer firstSubmapPosition = read<pointer>(levelFile).swap();
+        // Skip until object types
+        advance(7 * 4);
+        
+        // Family names
+        read<LinkedList>(levelFile).doAt(this, ptrReadFn([this](std::fstream& stream) {
+            ReadObjectType(this, stream, this->interface->familyNames);
+        }));
+        
+        // Model names
+        read<LinkedList>(levelFile).doAt(this, ptrReadFn([this](std::fstream& stream) {
+            ReadObjectType(this, stream, this->interface->modelNames);
+        }));
+        
+        // Instance names
+        read<LinkedList>(levelFile).doAt(this, ptrReadFn([this](std::fstream& stream) {
+            ReadObjectType(this, stream, this->interface->instanceNames);
+        }));
+        
+        // 1451256
+        
+//        readonly pointer actual_world;
+//            readonly pointer dynamic_world;
+//            readonly pointer inactive_dynamic_world;
+//            readonly pointer father_sector;
+//            readonly pointer first_submap_position;
+//            readonly tdstAlways always_structure;
+//            readonly tdstObjectType object_type;
     }
 }
 
@@ -232,8 +360,16 @@ GameInterface::GameInterface(std::fstream& fix,
     level.push_back(fixLevel);
     level.push_back(lvlLevel);
     
+    fixLevel->ReadFillInPointers();
+    lvlLevel->ReadFillInPointers();
+    
     fixLevel->Load();
     lvlLevel->Load();
+    
+    for (Actor& a : actors)
+    {
+        a.name = instanceNames.at(a.instanceType);
+    }
 }
 
 Actor* GameInterface::findActor(std::string name)
@@ -247,7 +383,7 @@ Actor* GameInterface::findActor(std::string name)
 Macro* GameInterface::findMacro(Actor* actor, std::string macroName)
 {
     if (!actor) return nullptr;
-    for (Macro& m : actor->macros)
+    for (Macro& m : actor->macroList)
         if (m.name == macroName) return &m;
     
     return nullptr;

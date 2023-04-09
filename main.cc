@@ -51,7 +51,13 @@ int main(int argc, const char * argv[])
     compiler.callbackFindSubroutine = findSubroutine;
     compiler.compile(source.str());
     
-    printf("n nodes: %zu\n", compiler.nodes.size());
+    for (Node node : compiler.nodes)
+    {
+        for (int i = 0; i < (node.depth-1)*4; i++)printf(" ");
+        printf("%s: %d (%d)\n", compiler.nodeTypeTable[node.type].c_str(), node.param, node.depth);
+    }
+    
+    //printf("n nodes: %zu\n", compiler.nodes.size());
     
     return 0;
 }

@@ -90,19 +90,12 @@ struct CompilerContext
     }
     
     // Appends a new node to the tree.
-    template <typename T>
-    void makeNode(NodeType type, T param)
+    void makeNode(NodeType type, unsigned param)
     {
         Node nd;
         nd.type = type;
         nd.depth = currentDepth;
-        nd.param = 0;
-        
-        try {
-            nd.param = std::any_cast<uint32_t>(param);
-        } catch (std::bad_any_cast::exception exception) {
-            fprintf(stderr, "invalid cast\n");
-        }
+        nd.param = param;
         
         if (callbackEmitNode)
             callbackEmitNode(nd.type, nd.param, nd.depth);

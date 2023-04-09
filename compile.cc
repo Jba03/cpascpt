@@ -22,7 +22,7 @@ class TreeShapeListener : public GenericBaseListener
 private:
     CompilerContext* compiler;
     bool dotAccess = false;
-    std::string targetActorName;
+    std::string targetActorName = "Rayman";
     
     std::string errorString = "No error";
     
@@ -50,6 +50,12 @@ private:
     {
         return compiler->callbackFindSubroutine ?
         compiler->callbackFindSubroutine(targetActorName.c_str(), name.c_str()) : 0;
+    }
+    
+    uint32_t findActor(std::string name)
+    {
+        return compiler->callbackFindActor ?
+        compiler->callbackFindActor(name.c_str()) : 0;
     }
     
     bool isVectorOp()
@@ -131,11 +137,15 @@ public:
         else if (metaActionIndex >= 0) compiler->makeNode(NodeType::MetaAction, metaActionIndex);
         else if ((subroutine = findSubroutine(name)) != 0) compiler->makeNode(NodeType::SubRoutine, subroutine);
         else fail(ctx, "No such callable method '" + name + "' found");
-        // Make sure only procedures can be called within actor reference access.
-        if (this->dotAccess && functionIndex   >= 0) fail(ctx, "Cannot call function '" + name + "' on actor reference");
-        if (this->dotAccess && conditionIndex  >= 0) fail(ctx, "Cannot call condition '" + name + "' on actor reference");
-        if (this->dotAccess && metaActionIndex >= 0) fail(ctx, "Cannot call meta-action '" + name + "' on actor reference");
-        //if (this->dotAccess && subroutine >= 0) fail(ctx, "Cannot call meta-action '" + name + "' on actor reference");
+        
+        if (subroutine != 0)
+        {
+            // Make sure only procedures can be called within actor reference access.
+            if (this->dotAccess && functionIndex   >= 0) fail(ctx, "Cannot call function '" + name + "' on actor reference");
+            if (this->dotAccess && conditionIndex  >= 0) fail(ctx, "Cannot call condition '" + name + "' on actor reference");
+            if (this->dotAccess && metaActionIndex >= 0) fail(ctx, "Cannot call meta-action '" + name + "' on actor reference");
+            //if (this->dotAccess && subroutine >= 0) fail(ctx, "Cannot call meta-action '" + name + "' on actor reference");
+        }
         
         compiler->shiftDepth(+1);
     }
@@ -302,7 +312,13 @@ public:
     void enterVectorComponent(GenericParser::VectorComponentContext * ctx) override { }
     void exitVectorComponent(GenericParser::VectorComponentContext * ctx) override { }
 
-    void enterDsgVar(GenericParser::DsgVarContext * ctx) override { }
+    void enterDsgVar(GenericParser::DsgVarContext * ctx) override
+    {
+        if (!ctx->numericLiteral()) fail(ctx, "DsgVar is missing numeric identifier");
+        unsigned id = std::stoi(ctx->numericLiteral()->getText());
+        compiler->makeNode(NodeType::DsgVarRef2, id);
+    }
+    
     void exitDsgVar(GenericParser::DsgVarContext * ctx) override { }
 
     void enterDsgVarIdentifier(GenericParser::DsgVarIdentifierContext * ctx) override { }
@@ -311,7 +327,10 @@ public:
     void enterActorReference(GenericParser::ActorReferenceContext * ctx) override
     {
         std::string name = ctx->getText();
-        printf("actor: %s\n", name.c_str());
+        uint32_t address = findActor(name);
+        if (address == 0) fail(ctx, "No such actor '" + name + "'");
+        compiler->makeNode(NodeType::ActorRef, address);
+        //printf("actor: %s\n", name.c_str());
     }
     
     void exitActorReference(GenericParser::ActorReferenceContext * ctx) override { }

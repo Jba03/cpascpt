@@ -38,6 +38,21 @@ struct Macro
     uint32_t offset;
 };
 
+struct Behavior
+{
+    std::string name;
+    uint32_t offset;
+};
+
+//struct behavior_list
+//{
+//    readonly pointer behavior;
+//    readonly uint32 n_behaviors;
+//    readonly uint32 no_initialization;
+//    readonly uint8 n_acttable_entries;
+//    padding(3)
+//};
+
 //
 //struct MacroList
 //{
@@ -66,6 +81,25 @@ struct Macro
 //    readonly uint8_t padding[3];
 //};
 //
+
+struct LinkedList
+{
+    readonly pointer start;
+    readonly pointer end;
+    readonly uint32_t count;
+};
+
+struct ObjectTypeElement
+{
+    pointer next;
+    pointer prev;
+    pointer father;
+    pointer name;
+    uint8_t priority;
+    uint8_t identifier;
+    uint8_t padding[2];
+};
+
 struct Brain
 {
     readonly pointer mind;
@@ -83,7 +117,11 @@ struct Actor
     uint32_t modelType;
     uint32_t instanceType;
     
-    std::vector<Macro> macros;
+    std::vector<Behavior> intelligenceList;
+    std::vector<Behavior> reflexList;
+    std::vector<Macro> macroList;
+    
+    
     std::string name;
     
     uint32_t offset;
@@ -102,6 +140,7 @@ struct Level
     void ReadActor(std::fstream& stream);
     
     Level(GameInterface* interface, std::fstream& lvl, std::fstream& ptr, bool isFix = true);
+    void ReadFillInPointers();
     void Load();
     void advance(int bytes);
     void seek(long offset);
@@ -113,6 +152,10 @@ struct GameInterface
     // [1] = level memory
     std::vector<Level*> level;
     std::vector<Actor> actors;
+    
+    std::vector<std::string> familyNames;
+    std::vector<std::string> modelNames;
+    std::vector<std::string> instanceNames;
     
     GameInterface() {}
     GameInterface(std::fstream& fix,
