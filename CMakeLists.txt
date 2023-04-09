@@ -9,6 +9,12 @@ if (NOT ${antlr4})
     message(FATAL_ERROR "could not find anltr4 package")
 endif()
 
+if (NOT EXISTS parser)
+    # Generate antlr files
+    execute_process(COMMAND antlr -Dlanguage=Cpp Generic.g4 -o parser)
+    execute_process(COMMAND antlr4 -Dlanguage=Cpp Generic.g4 -o parser)
+endif()
+
 include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/parser)
 include_directories(${ANTLR4_INCLUDE_DIR})
