@@ -90,7 +90,7 @@ public:
     void enterIfStatement(GenericParser::IfStatementContext * ctx) override
     {
         if (!ctx->ifCondition()) fail(ctx, "Missing condition in if-statement");
-        compiler->makeNode(NodeType::KeyWord, 0 /* If */);
+        compiler->makeNode(NodeType::KeyWord, 0u /* If */);
         compiler->shiftDepth(+1);
     }
     
@@ -102,14 +102,14 @@ public:
     void exitIfCondition(GenericParser::IfConditionContext * ctx) override
     {
         compiler->shiftDepth(-1);
-        compiler->makeNode(NodeType::KeyWord, 16 /* Then */);
+        compiler->makeNode(NodeType::KeyWord, 16u /* Then */);
         compiler->shiftDepth(+1);
     }
 
     void enterElseStatement(GenericParser::ElseStatementContext * ctx) override
     {
         compiler->shiftDepth(-1);
-        compiler->makeNode(NodeType::KeyWord, 17 /* Else */);
+        compiler->makeNode(NodeType::KeyWord, 17u /* Else */);
         compiler->shiftDepth(+1);
     }
 
@@ -131,10 +131,10 @@ public:
         long metaActionIndex = tableFindSymbol(compiler->metaActionTable, name);
         
         uint32_t subroutine = 0;
-        if      (functionIndex   >= 0) compiler->makeNode(NodeType::Function, functionIndex);
-        else if (procedureIndex  >= 0) compiler->makeNode(NodeType::Procedure, procedureIndex);
-        else if (conditionIndex  >= 0) compiler->makeNode(NodeType::Condition, conditionIndex);
-        else if (metaActionIndex >= 0) compiler->makeNode(NodeType::MetaAction, metaActionIndex);
+        if      (functionIndex   >= 0) compiler->makeNode(NodeType::Function, unsigned(functionIndex));
+        else if (procedureIndex  >= 0) compiler->makeNode(NodeType::Procedure, unsigned(procedureIndex));
+        else if (conditionIndex  >= 0) compiler->makeNode(NodeType::Condition, unsigned(conditionIndex));
+        else if (metaActionIndex >= 0) compiler->makeNode(NodeType::MetaAction, unsigned(metaActionIndex));
         else if ((subroutine = findSubroutine(name)) != 0) compiler->makeNode(NodeType::SubRoutine, subroutine);
         else fail(ctx, "No such callable method '" + name + "' found");
         
@@ -171,10 +171,10 @@ public:
         if (arithmeticOperator)
         {
             std::string op = arithmeticOperator->getText();
-            if (op == "+") compiler->makeNode(NodeType::Operator, isVectorOp() ? 17 : 0);
-            else if (op == "-") compiler->makeNode(NodeType::Operator, isVectorOp() ? 18 : 1);
-            else if (op == "*") compiler->makeNode(NodeType::Operator, isVectorOp() ? 20 : 2);
-            else if (op == "/") compiler->makeNode(NodeType::Operator, isVectorOp() ? 21 : 3);
+            if (op == "+") compiler->makeNode(NodeType::Operator, isVectorOp() ? 17u : 0u);
+            else if (op == "-") compiler->makeNode(NodeType::Operator, isVectorOp() ? 18u : 1u);
+            else if (op == "*") compiler->makeNode(NodeType::Operator, isVectorOp() ? 20u : 2u);
+            else if (op == "/") compiler->makeNode(NodeType::Operator, isVectorOp() ? 21u : 3u);
             else if (op == "%")
             {
                 if (isVectorOp())
@@ -192,12 +192,12 @@ public:
             if (isVectorOp()) fail(ctx, "Attempt to perform comparison on vector operand");
             
             std::string op = comparisonOperator->getText();
-            if      (op == "==") compiler->makeNode(NodeType::Condition, 4);
-            else if (op == "!=") compiler->makeNode(NodeType::Condition, 5);
-            else if (op ==  "<") compiler->makeNode(NodeType::Condition, 6);
-            else if (op ==  ">") compiler->makeNode(NodeType::Condition, 7);
-            else if (op == "<=") compiler->makeNode(NodeType::Condition, 8);
-            else if (op == ">=") compiler->makeNode(NodeType::Condition, 9);
+            if      (op == "==") compiler->makeNode(NodeType::Condition, 4u);
+            else if (op == "!=") compiler->makeNode(NodeType::Condition, 5u);
+            else if (op ==  "<") compiler->makeNode(NodeType::Condition, 6u);
+            else if (op ==  ">") compiler->makeNode(NodeType::Condition, 7u);
+            else if (op == "<=") compiler->makeNode(NodeType::Condition, 8u);
+            else if (op == ">=") compiler->makeNode(NodeType::Condition, 9u);
             else fail(ctx, "Invalid comparison operator '" + op + "'");
             
             compiler->shiftDepth(+1);
@@ -208,10 +208,10 @@ public:
             if (isVectorOp()) fail(ctx, "Attempt to perform logical operation on vector operand");
             
             std::string op = logicalOperator->getText();
-            if (op == "&&") compiler->makeNode(NodeType::Condition, 0);
-            else if (op == "||") compiler->makeNode(NodeType::Condition, 1);
+            if (op == "&&") compiler->makeNode(NodeType::Condition, 0u);
+            else if (op == "||") compiler->makeNode(NodeType::Condition, 1u);
             // `NOT` operator (2) is specified as a unary operator further down.
-            else if (op ==  "^") compiler->makeNode(NodeType::Condition, 3);
+            else if (op ==  "^") compiler->makeNode(NodeType::Condition, 3u);
             else fail(ctx, "Invalid logical operator '" + op + "'");
             
             compiler->shiftDepth(+1);
@@ -221,11 +221,11 @@ public:
         {
             std::string op = unaryOperator->getText();
             if      (op == "+") /* Do nothing */;
-            else if (op == "-") compiler->makeNode(NodeType::Operator, isVectorOp() ? 19 : 4);
+            else if (op == "-") compiler->makeNode(NodeType::Operator, isVectorOp() ? 19u : 4u);
             else if (op == "!")
             {
                 if (isVectorOp()) fail(ctx, "Attempt to perform logical operation on vector operand");
-                compiler->makeNode(NodeType::Condition, 2 /* ! */);
+                compiler->makeNode(NodeType::Condition, 2u /* ! */);
             }
             else fail(ctx, "Invalid unary operator '" + op + "'");
             
@@ -235,11 +235,11 @@ public:
         if (assignmentOperator)
         {
             std::string op = assignmentOperator->getText();
-            if      (op ==  "=") compiler->makeNode(NodeType::Operator, 12);
-            else if (op == "+=") compiler->makeNode(NodeType::Operator, 6);
-            else if (op == "-=") compiler->makeNode(NodeType::Operator, 7);
-            else if (op == "*=") compiler->makeNode(NodeType::Operator, 8);
-            else if (op == "/=") compiler->makeNode(NodeType::Operator, 9);
+            if      (op ==  "=") compiler->makeNode(NodeType::Operator, 12u);
+            else if (op == "+=") compiler->makeNode(NodeType::Operator, 6u);
+            else if (op == "-=") compiler->makeNode(NodeType::Operator, 7u);
+            else if (op == "*=") compiler->makeNode(NodeType::Operator, 8u);
+            else if (op == "/=") compiler->makeNode(NodeType::Operator, 9u);
             else fail(ctx, "Invalid assignment operator '" + op + "'");
             
             compiler->shiftDepth(+1);
@@ -248,7 +248,7 @@ public:
         if (field)
         {
             if (field->getText() != ".") fail(ctx, "Invalid field access");
-            compiler->makeNode(NodeType::Operator, 13 /* . */);
+            compiler->makeNode(NodeType::Operator, 13u /* . */);
             compiler->shiftDepth(+1);
             this->dotAccess = true;
         }
@@ -256,9 +256,9 @@ public:
         if (vectorComponent)
         {
             std::string component = vectorComponent->getText();
-            if      (component == "X" || component == "x") compiler->makeNode(NodeType::Operator, 14 /* .X */);
-            else if (component == "Y" || component == "y") compiler->makeNode(NodeType::Operator, 15 /* .Y */);
-            else if (component == "Z" || component == "z") compiler->makeNode(NodeType::Operator, 16 /* .Z */);
+            if      (component == "X" || component == "x") compiler->makeNode(NodeType::Operator, 14u /* .X */);
+            else if (component == "Y" || component == "y") compiler->makeNode(NodeType::Operator, 15u /* .Y */);
+            else if (component == "Z" || component == "z") compiler->makeNode(NodeType::Operator, 16u /* .Z */);
             else fail(ctx, "Invalid vector component '" + component + "'");
             //compiler->shiftDepth(+1);
         }
@@ -297,7 +297,7 @@ public:
     void enterVector(GenericParser::VectorContext * ctx) override
     {
         // Presume the vector is always non-constant.
-        compiler->makeNode(NodeType::Vector, 0);
+        compiler->makeNode(NodeType::Vector, 0u);
         compiler->shiftDepth(+1);
     }
     
@@ -335,7 +335,12 @@ public:
     
     void exitActorReference(GenericParser::ActorReferenceContext * ctx) override { }
 
-    void enterLiteral(GenericParser::LiteralContext * ctx) override { }
+    void enterLiteral(GenericParser::LiteralContext * ctx) override
+    {
+        if (ctx->numericLiteral()) compiler->makeNode(NodeType::Constant, unsigned(std::stoi(ctx->getText())));
+        else if (ctx->StringLiteral()) compiler->makeNode(NodeType::String, ctx->getText());
+    }
+    
     void exitLiteral(GenericParser::LiteralContext * ctx) override { }
 
     void enterNumericLiteral(GenericParser::NumericLiteralContext * ctx) override { }
@@ -429,6 +434,6 @@ DLLEXPORT int CPAScriptCompilerCompile(CompilerContext* compiler, const char* so
 
 DLLEXPORT void CPAScriptCompilerDestroy(CompilerContext *c)
 {
-    c->nodes.clear();
+    c->nodetree.clear();
     delete c;
 }

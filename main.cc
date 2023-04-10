@@ -36,6 +36,7 @@ int main(int argc, const char * argv[])
     std::filesystem::path fixPath = std::filesystem::path(argv[1]).replace_extension("");
     std::filesystem::path levelPath = std::filesystem::path(argv[2]).replace_extension("");
     std::filesystem::path sourcePath = std::filesystem::path(argv[3]).remove_filename();
+    std::filesystem::path sourceFileName = std::filesystem::path(argv[3]).filename();
     
     
     // TODO: maybe read these into memory before initializing the interface.
@@ -70,11 +71,10 @@ int main(int argc, const char * argv[])
     compiler.callbackFindSubroutine = findSubroutine;
     compiler.compile(source.str());
     
-    for (Node node : compiler.nodes)
-    {
-        for (int i = 0; i < (node.depth-1)*4; i++)printf(" ");
-        printf("%s: %d (%d)\n", compiler.nodeTypeTable[node.type].c_str(), node.param, node.depth);
-    }
+    compiler.nodetree.print(compiler.nodeTypeTable);
+    
+    std::fstream binary(sourcePath.string() + sourceFileName.string() + ".bin", std::ios_base::out | std::ios_base::binary);
+    compiler.nodetree.write(binary);
     
     return 0;
 }
