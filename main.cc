@@ -40,10 +40,10 @@ int main(int argc, const char * argv[])
     
     
     // TODO: maybe read these into memory before initializing the interface.
-    std::fstream fixLvl(fixPath.string() + ".lvl", std::ios_base::binary | std::ios_base::in);
-    std::fstream fixPtr(fixPath.string() + ".ptr", std::ios_base::binary | std::ios_base::in);
-    std::fstream lvlLvl(levelPath.string() + ".lvl", std::ios_base::binary | std::ios_base::in);
-    std::fstream lvlPtr(levelPath.string() + ".ptr", std::ios_base::binary | std::ios_base::in);
+    std::fstream fixLvl(fixPath.string() + ".lvl", std::ios_base::binary | std::ios_base::in | std::ios_base::out);
+    std::fstream fixPtr(fixPath.string() + ".ptr", std::ios_base::binary | std::ios_base::in | std::ios_base::out);
+    std::fstream lvlLvl(levelPath.string() + ".lvl", std::ios_base::binary | std::ios_base::in | std::ios_base::out);
+    std::fstream lvlPtr(levelPath.string() + ".ptr", std::ios_base::binary | std::ios_base::in | std::ios_base::out);
     
     if (!fixLvl.is_open() || !fixPtr.is_open())
     {
@@ -75,6 +75,8 @@ int main(int argc, const char * argv[])
     
     std::fstream binary(sourcePath.string() + sourceFileName.string() + ".bin", std::ios_base::out | std::ios_base::binary);
     compiler.nodetree.write(binary);
+    
+    gameInterface.insertTree(compiler.nodetree);
     
     return 0;
 }

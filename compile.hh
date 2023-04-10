@@ -65,7 +65,6 @@ struct CompilerContext
     
     Target target;
     Options options;
-    
     NodeTree nodetree;
     
     // Table

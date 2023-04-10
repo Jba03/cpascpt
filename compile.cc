@@ -22,8 +22,8 @@ class TreeShapeListener : public GenericBaseListener
 private:
     CompilerContext* compiler;
     bool dotAccess = false;
-    std::string targetActorName = "Rayman";
     
+    std::string targetActorName = "Rayman";
     std::string errorString = "No error";
     
     void fail(ParserRuleContext* ctx, std::string reason)
@@ -123,7 +123,6 @@ public:
             fail(ctx, "Missing callable method name");
         
         std::string name = nameCtx->getText();
-        std::cout << name << std::endl;
         
         long functionIndex = tableFindSymbol(compiler->functionTable, name);
         long procedureIndex = tableFindSymbol(compiler->procedureTable, name);
@@ -337,8 +336,20 @@ public:
 
     void enterLiteral(GenericParser::LiteralContext * ctx) override
     {
-        if (ctx->numericLiteral()) compiler->makeNode(NodeType::Constant, unsigned(std::stoi(ctx->getText())));
-        else if (ctx->StringLiteral()) compiler->makeNode(NodeType::String, ctx->getText());
+        if (ctx->numericLiteral())
+        {
+            std::string num = ctx->getText();
+            if (num.find('.') != std::string::npos)
+                compiler->makeNode(NodeType::Real, std::stof(num));
+            else
+                compiler->makeNode(NodeType::Constant, unsigned(std::stoi(num)));
+        }
+        else if (ctx->StringLiteral())
+        {
+            std::string str = ctx->getText();
+            str = str.substr(1, str.length() - 2); // Remove " and \0
+            compiler->makeNode(NodeType::String, str);
+        }
     }
     
     void exitLiteral(GenericParser::LiteralContext * ctx) override { }

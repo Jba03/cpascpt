@@ -88,6 +88,21 @@ struct NodeTree
         return nodes.size();
     }
     
+    unsigned textRegionSize()
+    {
+        unsigned length = 0;
+        for (Node node : nodes)
+        {
+            if (node.type == NodeType::String)
+            {
+                length += std::any_cast<std::string>(node.param).length();
+                length = length + 4 - (length % 4);
+            }
+        }
+        
+        return length;
+    }
+    
     void print(std::vector<std::string>& nodeTypes)
     {
         for (Node node : nodes)
@@ -98,7 +113,11 @@ struct NodeTree
             switch (node.type)
             {
                 case NodeType::String:
-                    printf("%s: %s (%d)\n", nodeTypes[node.type].c_str(), std::any_cast<std::string>(node.param).c_str(), node.depth);
+                    printf("%s: \"%s\" (%d)\n", nodeTypes[node.type].c_str(), std::any_cast<std::string>(node.param).c_str(), node.depth);
+                    break;
+                    
+                case NodeType::Real:
+                    printf("%s: %g (%d)\n", nodeTypes[node.type].c_str(), std::any_cast<float>(node.param), node.depth);
                     break;
                     
                 default:
@@ -116,9 +135,19 @@ struct NodeTree
             uint32_t param = 0;
             uint8_t padding[3] = {0, 0, 0};
             
-            if (type != NodeType::String)
+            switch (type)
             {
-                param = std::any_cast<uint32_t>(node.param);
+                case NodeType::String:
+                    param = 0;
+                    break;
+                    
+                case NodeType::Real:
+                    *(uint32_t*)&param = std::any_cast<float>(node.param);
+                    break;
+                    
+                default:
+                    param = std::any_cast<uint32_t>(node.param);
+                    break;
             }
             
             stream.write((char*)&param, 4);

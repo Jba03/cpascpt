@@ -154,9 +154,9 @@ static void ReadIntelligence(Level *level, std::fstream& stream, std::vector<T>&
         listStream.seekg(savepoint);
         // Read the macros
         read<pointer>(listStream).doAt(level, ptrReadFn([level, &list, count, isMacro](std::fstream& typeStream) {
-            uint32_t offset = typeStream.tellg();
-            
             for (unsigned int i = 0; i < count; i++) {
+                
+                uint32_t offset = typeStream.tellg();
                 
                 char* buf = new char[0x100];
                 typeStream.read(buf, 0x100);
@@ -178,12 +178,13 @@ static void ReadIntelligence(Level *level, std::fstream& stream, std::vector<T>&
     stream.seekg(long(checkpoint) + 4);
 }
 
-void Level::ReadActor(std::fstream& stream)
+void Level::ReadActor(std::fstream& stream, uint8_t fileID)
 {
     //auto savepoint = stream.tellg();
     
     Actor actor;
     actor.offset = stream.tellg();
+    actor.fileID = fileID;
     
     stream.ignore(4); // Skip 3DData
     read<pointer>(stream).doAt(this, ptrReadFn([this, &actor](std::fstream& stdGameStream) {
@@ -283,9 +284,9 @@ void Level::Load()
         uint32_t numActors = read<uint32_t>(levelFile).swap();
         for (unsigned int n = 0; n < numActors; n++)
         {
-            read<pointer>(levelFile).doAt(this, ptrReadFn([this](std::fstream& actorStream) {
+            read<pointer>(levelFile).doAt(this, std::function<void (std::fstream &, uint8_t)> ([this](std::fstream& actorStream, uint8_t fileID) {
                 // Start of actor struct
-                ReadActor(actorStream);
+                ReadActor(actorStream, fileID);
             }));
         }
         
@@ -326,16 +327,6 @@ void Level::Load()
         read<LinkedList>(levelFile).doAt(this, ptrReadFn([this](std::fstream& stream) {
             ReadObjectType(this, stream, this->interface->instanceNames);
         }));
-        
-        // 1451256
-        
-//        readonly pointer actual_world;
-//            readonly pointer dynamic_world;
-//            readonly pointer inactive_dynamic_world;
-//            readonly pointer father_sector;
-//            readonly pointer first_submap_position;
-//            readonly tdstAlways always_structure;
-//            readonly tdstObjectType object_type;
     }
 }
 
@@ -370,6 +361,8 @@ GameInterface::GameInterface(std::fstream& fix,
     {
         a.name = instanceNames.at(a.instanceType);
     }
+    
+    targetActor = findActor("Rayman");
 }
 
 Actor* GameInterface::findActor(std::string name)
@@ -387,4 +380,78 @@ Macro* GameInterface::findMacro(Actor* actor, std::string macroName)
         if (m.name == macroName) return &m;
     
     return nullptr;
+}
+
+int GameInterface::insertTree(NodeTree& tree)
+{
+    if (!targetActor) return -1;
+    
+    // Find the files in which the target actor is located
+    std::fstream& levelStream = level[targetActor->fileID]->levelFile;
+    std::fstream& pointerStream = level[targetActor->fileID]->pointerFile;
+    
+    levelStream.seekg(0, levelStream.end);
+    long levelStreamSize = levelStream.tellg();
+    levelStream.seekg(0, levelStream.beg);
+    
+    pointerStream.seekg(0, pointerStream.end);
+    long pointerStreamSize = pointerStream.tellg();
+    pointerStream.seekg(0, pointerStream.beg);
+    
+    // Seek to the end of the level
+    levelStream.seekg(0, levelStream.end);
+    // Script marker begin
+    levelStream << "cpascpt.begin" << '\0' << '\0' << '\0';
+    
+    long textRegionOffset = levelStream.tellg();
+    // Allocate size for the text region
+    for (int i = 0; i < tree.textRegionSize(); i++) levelStream << '\0';
+    
+    for (Node node : tree.nodes)
+    {
+        uint32_t param = 0;
+        
+        switch (node.type)
+        {
+            case NodeType::String:
+            {
+                auto save = levelStream.tellg();
+                levelStream.seekg(textRegionOffset);
+                param = textRegionOffset;
+                std::string text = std::any_cast<std::string>(node.param);
+                levelStream << text;
+                textRegionOffset += text.length() + 4 - (text.length() % 4);
+                levelStream.seekg(save);
+                break;
+            }
+                
+            case NodeType::Real:
+            {
+                float f = std::any_cast<float>(node.param);
+                param = *(uint32_t*)&f;
+                break;
+            }
+                
+            default:
+                param = std::any_cast<uint32_t>(node.param);
+                break;
+        }
+        
+        param = swap32(param);
+        
+        uint8_t padding[3] = {0, 0, 0};
+        levelStream.write((char*)&param, 4);
+        levelStream.write((char*)&padding, 3);
+        levelStream.write((char*)&node.type, 1);
+        levelStream.write((char*)&padding, 2);
+        levelStream.write((char*)&node.depth, 1);
+        levelStream.write((char*)&padding, 1);
+    }
+    
+    // Script marker end
+    levelStream << "cpascpt.end" << '\0' << '\0' << '\0' << '\0' << '\0';
+    
+    levelStream.close();
+    
+    return 0;
 }

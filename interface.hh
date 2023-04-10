@@ -10,8 +10,9 @@
 
 #include <map>
 #include <unordered_map>
-#include <vector>
 #include <fstream>
+
+#include "nodetree.hh"
 
 #define swap16(data) \
     ((((data) >> 8) & 0x00FF) | (((data) << 8) & 0xFF00))
@@ -125,6 +126,7 @@ struct Actor
     std::string name;
     
     uint32_t offset;
+    int fileID;
 };
 
 struct Level
@@ -137,7 +139,7 @@ struct Level
     
     int numTextures = 0;
     
-    void ReadActor(std::fstream& stream);
+    void ReadActor(std::fstream& stream, uint8_t fileID);
     
     Level(GameInterface* interface, std::fstream& lvl, std::fstream& ptr, bool isFix = true);
     void ReadFillInPointers();
@@ -152,6 +154,8 @@ struct GameInterface
     // [1] = level memory
     std::vector<Level*> level;
     std::vector<Actor> actors;
+    // The actor in which the scripts are to be located
+    Actor* targetActor = nullptr;
     
     std::vector<std::string> familyNames;
     std::vector<std::string> modelNames;
@@ -165,6 +169,7 @@ struct GameInterface
     
     Actor* findActor(std::string name);
     Macro* findMacro(Actor* actor, std::string macroName);
+    int insertTree(NodeTree& tree);
 };
 
 #endif /* interface_hh */
