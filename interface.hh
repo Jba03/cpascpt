@@ -45,44 +45,6 @@ struct Behavior
     uint32_t offset;
 };
 
-//struct behavior_list
-//{
-//    readonly pointer behavior;
-//    readonly uint32 n_behaviors;
-//    readonly uint32 no_initialization;
-//    readonly uint8 n_acttable_entries;
-//    padding(3)
-//};
-
-//
-//struct MacroList
-//{
-//    readonly pointer macros;
-//    readonly uint8_t numMacros;
-//    readonly uint8_t padding[3];
-//};
-//
-//struct AIModel
-//{
-//    readonly pointer intelligenceBehaviorList;
-//    readonly pointer reflexBehaviorList;
-//    readonly pointer dsgVar;
-//    readonly pointer macroList;
-//    readonly uint8_t secondPass;
-//    readonly uint8_t padding[3];
-//};
-//
-//struct Mind
-//{
-//    readonly pointer AIModel;
-//    readonly pointer intelligence;
-//    readonly pointer reflex;
-//    readonly pointer dsgMem;
-//    readonly uint8_t runIntelligence;
-//    readonly uint8_t padding[3];
-//};
-//
-
 struct LinkedList
 {
     readonly pointer start;
@@ -99,17 +61,6 @@ struct ObjectTypeElement
     uint8_t priority;
     uint8_t identifier;
     uint8_t padding[2];
-};
-
-struct Brain
-{
-    readonly pointer mind;
-    readonly pointer lastNoCollideMaterial;
-    readonly uint8_t warnMechanics;
-    readonly uint8_t activeDuringTransition;
-    readonly uint8_t padding[2];
-    
-    
 };
 
 struct Actor
